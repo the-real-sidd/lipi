@@ -8,6 +8,18 @@ enum Inserter {
 
     static var isTrusted: Bool { AXIsProcessTrusted() }
 
+    /// macOS ties Accessibility to the exact app build. After an update the old switch can stay
+    /// "on" while this copy is not allowed. Clearing Lipi's entry and asking again fixes it.
+    static func resetAccessibility() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        task.arguments = ["reset", "Accessibility", Bundle.main.bundleIdentifier ?? "app.lipi.mac"]
+        try? task.run()
+        task.waitUntilExit()
+        promptForAccessibility()
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    }
+
     static func promptForAccessibility() {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)

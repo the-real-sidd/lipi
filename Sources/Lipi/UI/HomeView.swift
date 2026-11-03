@@ -78,6 +78,9 @@ struct HomeView: View {
                 SettingRow(title: "Accessibility", detail: "Lets Lipi type into other apps") {
                     StatusBadge(state: model.accessibility, action: "Open Settings") { model.requestAccessibility() }
                 }
+                if model.accessibility != .ready {
+                    AccessibilityHint()
+                }
                 SettingRow(title: "\(speaks) speech model", detail: "Downloaded and managed by macOS") {
                     StatusBadge(state: model.speechModels[model.speechLocale] ?? .missing, action: "Download") {
                         model.installSpeech(model.speechLocale)

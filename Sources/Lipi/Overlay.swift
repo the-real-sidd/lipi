@@ -27,9 +27,11 @@ struct OverlayView: View {
                     Text(line)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(isError ? Color.orange : Color.primary)
-                        .lineLimit(2)
-                        .truncationMode(.head)
-                        .frame(maxWidth: 380, alignment: .leading)
+                        // Live speech keeps the newest words visible; messages wrap and read in full.
+                        .lineLimit(isMessage ? 3 : 2)
+                        .truncationMode(isMessage ? .tail : .head)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 400, alignment: .leading)
                         .animation(nil, value: model.text)
                 }
             }
@@ -38,10 +40,15 @@ struct OverlayView: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.12)))
             .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
-            .fixedSize(horizontal: true, vertical: true)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .padding(.bottom, 8)
+    }
+
+    private var isMessage: Bool {
+        if case .message = model.phase { return true }
+        return false
     }
 
     private var isError: Bool {
@@ -88,7 +95,7 @@ final class Overlay {
     private var hideWork: DispatchWorkItem?
 
     init() {
-        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 110),
+        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 130),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         panel.isOpaque = false
         panel.backgroundColor = .clear

@@ -108,6 +108,25 @@ struct LanguagePicker: View {
     }
 }
 
+/// Shown while Accessibility is off: explains the "switch is on but it still doesn't work" case.
+struct AccessibilityHint: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Already switched on? macOS ties this permission to each version of Lipi, so an old switch can stay on for a previous copy. Fix clears it; then switch Lipi on again in the list.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Fix Accessibility") { Inserter.resetAccessibility() }
+                    .buttonStyle(.glass).controlSize(.small)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.bottom, 6)
+    }
+}
+
 /// SwiftUI's `@State` is a compiler macro in the macOS 27 SDK, and its plugin ships only with
 /// Xcode. Using the property wrapper through an alias lets Lipi build with just the
 /// Command Line Tools.

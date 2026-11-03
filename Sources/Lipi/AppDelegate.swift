@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyKeys()
         hotkey.start()
         hotkeyTrusted = Inserter.isTrusted
+        watchForAccessibility()
 
         model.onChange = { [weak self] in self?.settingsChanged() }
         model.onStartNotes = { [weak self] in self?.startNotes(appName: nil) }
@@ -93,6 +94,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         speech.resetStandby()
         pipeline.translator.reset()
         Task { await warmUp() }
+    }
+
+    private var trustTimer: Timer?
+
+    /// Checks every 2 s until Accessibility is granted, then re-arms the shortcuts. Global key
+    /// monitors installed before the grant never fire, so this saves a restart.
+    private func watchForAccessibility() {
+        guard trustTimer == nil, !Inserter.isTrusted else { return }
+        trustTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] timer in
+            Task { @MainActor in
+                guard let self, Inserter.isTrusted else { return }
+                timer.invalidate()
+                self.trustTimer = nil
+                self.hotkeyTrusted = true
+                self.hotkey.start()
+                self.overlay.flash("Lipi can type for you now", seconds: 1.8)
+                Log.write("accessibility granted, shortcuts re-armed")
+            }
+        }
     }
 
     private func applyKeys() {
@@ -245,7 +265,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             let outcome = Inserter.insert(Inserter.spacedForCursor(text))
             if outcome == .copiedOnly {
-                overlay.flash("Copied. Allow Accessibility in settings so Lipi can type for you.", isError: true, seconds: 3.5)
+                overlay.flash("Your text is copied. Lipi needs Accessibility to type it for you: open Lipi → Settings → Permissions.", isError: true, seconds: 5)
+                watchForAccessibility()
             } else if let note {
                 overlay.flash(note, isError: true, seconds: 4)
             } else {
@@ -260,7 +281,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func translateSelection() async {
         guard state == .idle else { return }
         guard Inserter.isTrusted else {
-            overlay.flash("Allow Accessibility in Lipi settings to translate selected text.", isError: true)
+            overlay.flash("Lipi needs Accessibility to read selected text: open Lipi → Settings → Permissions.", isError: true, seconds: 5)
+            watchForAccessibility()
+            mainWindow.show(.settings)
             return
         }
         guard let text = await Inserter.selectedText()?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
