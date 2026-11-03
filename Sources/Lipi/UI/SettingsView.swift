@@ -2,12 +2,14 @@ import SwiftUI
 
 struct SettingsView: View {
     enum Tab: String, CaseIterable, Identifiable {
-        case general = "General", languages = "Languages", notetaker = "Notetaker", setup = "Permissions", privacy = "Privacy"
+        case general = "General", ai = "AI mode", languages = "Languages", voice = "Voice", notetaker = "Notetaker", setup = "Permissions", privacy = "Privacy"
         var id: String { rawValue }
         var icon: String {
             switch self {
             case .general: "slider.horizontal.3"
+            case .ai: "sparkles"
             case .languages: "globe"
+            case .voice: "waveform"
             case .notetaker: "record.circle"
             case .setup: "checkmark.shield"
             case .privacy: "lock"
@@ -17,7 +19,7 @@ struct SettingsView: View {
 
     @ObservedObject var model: AppModel
     @ObservedObject private var catalog = LanguageCatalog.shared
-    @ViewState private var tab: Tab = .general
+    private var tab: Tab { model.settingsTab }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -25,7 +27,7 @@ struct SettingsView: View {
                 Text("SETTINGS").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                     .padding(.horizontal, 10).padding(.bottom, 6)
                 ForEach(Tab.allCases) { t in
-                    Button { tab = t } label: {
+                    Button { model.settingsTab = t } label: {
                         Label(t.rawValue, systemImage: t.icon)
                             .font(.system(size: 13, weight: tab == t ? .semibold : .regular))
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -48,15 +50,17 @@ struct SettingsView: View {
                 }
                 .padding(10)
             }
-            .padding(14)
-            .frame(width: 190)
+            .padding(12)
+            .frame(width: 172)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     PageHeader(title: tab.rawValue)
                     switch tab {
                     case .general: general
+                    case .ai: AIModeCard(model: model)
                     case .languages: languages
+                    case .voice: voice
                     case .notetaker: notetaker
                     case .setup: setup
                     case .privacy: privacy
@@ -73,40 +77,56 @@ struct SettingsView: View {
     private var general: some View {
         Card {
             VStack(spacing: 0) {
-                SettingRow(title: "Dictation shortcut", detail: "Hold \(model.dictationKey.symbol) and speak. Add ⇧ Shift to keep the language you spoke.") {
+                SettingRow(title: "Type as you speak", detail: "Hold \(model.dictationKey.symbol) and talk. Lipi types what you said, cleaned up, in the language you spoke.") {
                     keyPicker($model.dictationKey)
                 }
                 Divider()
-                SettingRow(title: "Translate shortcut", detail: "Select text anywhere, then double-tap \(model.translateKey.symbol).") {
+                SettingRow(title: "Speak and translate", detail: "Hold \(model.translateDictationKey.symbol) and talk in any language. Lipi types it in \(LanguageCatalog.name(model.translateTarget)).") {
+                    keyPicker($model.translateDictationKey)
+                }
+                Divider()
+                SettingRow(title: "Translate selected text", detail: "Select text anywhere, then double-tap \(model.translateKey.symbol).") {
                     keyPicker($model.translateKey)
                 }
-                if model.dictationKey == .fn || model.translateKey == .fn {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "hand.tap").foregroundStyle(Brand.accent)
+                    Text("Hands-free: double-tap \(model.dictationKey.symbol) or \(model.translateDictationKey.symbol) and keep talking. Tap it again to finish, or press Esc to cancel.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 8)
+                if [model.dictationKey, model.translateDictationKey, model.translateKey].contains(where: { $0 == .rightOption || $0 == .leftOption }) {
+                    Label("The Claude and ChatGPT desktop apps also react to a double-tap of ⌥. If double-tapping opens them, use Right ⌘ or fn for Lipi, or change their shortcut.",
+                          systemImage: "info.circle")
+                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.bottom, 8)
+                }
+                if let conflict = model.shortcutConflict {
+                    Label(conflict, systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11)).foregroundStyle(.orange).padding(.bottom, 8)
+                }
+                if [model.dictationKey, model.translateDictationKey, model.translateKey].contains(.fn) {
                     Text("For fn: in System Settings → Keyboard, set \"Press 🌐 key to\" to \"Do Nothing\".")
                         .font(.system(size: 11)).foregroundStyle(.orange).frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 8)
                 }
                 Divider()
                 SettingRow(title: "Microphone", detail: currentMicName) {
                     Picker("", selection: $model.inputDeviceUID) {
-                        Text("System default").tag("")
+                        Text("Built-in mic (recommended)").tag("")
+                        Text("macOS default input").tag("system")
                         Divider()
                         ForEach(model.inputDevices) { Text($0.name).tag($0.id) }
                     }
-                    .labelsHidden().frame(width: 220)
+                    .labelsHidden().frame(width: 200)
                 }
                 Divider()
                 SettingRow(title: "Theme") {
                     Picker("", selection: $model.theme) {
                         ForEach(Theme.allCases) { Text($0.title).tag($0) }
                     }
-                    .pickerStyle(.segmented).labelsHidden().frame(width: 220)
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 200)
                 }
                 Divider()
                 SettingRow(title: "Smart cleanup", detail: "Uses Apple Intelligence on this Mac to fix \"at two, no wait, three\" corrections.") {
                     Toggle("", isOn: $model.smartCleanup).toggleStyle(.switch).labelsHidden()
-                }
-                Divider()
-                SettingRow(title: "Learn from my corrections", detail: "When you fix a word Lipi typed, it remembers the fix for next time.") {
-                    Toggle("", isOn: $model.learnCorrections).toggleStyle(.switch).labelsHidden()
                 }
                 Divider()
                 SettingRow(title: "Start sound") {
@@ -122,14 +142,18 @@ struct SettingsView: View {
     }
 
     private var currentMicName: String {
-        model.inputDevices.first { $0.id == model.inputDeviceUID }?.name ?? "System default"
+        switch model.inputDeviceUID {
+        case "": return "\(AudioDevices.builtInName() ?? "Built-in mic"). Keeps Bluetooth headphones in high-quality music mode while you dictate."
+        case "system": return "Whatever macOS uses. With Bluetooth headphones, music sounds muffled while you dictate."
+        default: return model.inputDevices.first { $0.id == model.inputDeviceUID }?.name ?? "Selected microphone"
+        }
     }
 
     private func keyPicker(_ binding: Binding<TriggerKey>) -> some View {
         Picker("", selection: binding) {
             ForEach(TriggerKey.allCases) { Text($0.title).tag($0) }
         }
-        .labelsHidden().frame(width: 220)
+        .labelsHidden().frame(width: 200)
     }
 
     // MARK: Languages
@@ -143,10 +167,9 @@ struct SettingsView: View {
                     }
                     modelRow(model.speechLocale)
                     Divider()
-                    SettingRow(title: "Type in", detail: "Lipi translates as you dictate. Hold ⇧ while speaking to skip it.") {
-                        LanguagePicker(title: "", selection: $model.outputLanguage,
-                                       choices: withSelection(catalog.translationLanguages, model.outputLanguage, allowEmpty: true),
-                                       extra: [LanguageChoice(id: "", name: "Same as I speak")])
+                    SettingRow(title: "Translate into", detail: "Used when you hold \(model.translateDictationKey.symbol). English is best for writing to people who don't read Hindi.") {
+                        LanguagePicker(title: "", selection: Binding(get: { model.translateTarget }, set: { model.outputLanguage = $0 }),
+                                       choices: withSelection(catalog.translationLanguages, model.translateTarget))
                     }
                     if let pair = model.dictationPair { pairRow(pair) }
                 }
@@ -212,6 +235,26 @@ struct SettingsView: View {
             }
         }
         .padding(.bottom, 10)
+    }
+
+    // MARK: Voice
+
+    private var voice: some View {
+        Card {
+            VStack(spacing: 0) {
+                SettingRow(title: "Voice commands", detail: "Say \"new line\" for a blank line, \"scratch that\" to undo, and \"heart emoji\", \"laughing emoji\" or \"thumbs up emoji\" for emoji.") {
+                    Toggle("", isOn: $model.voiceCommands).toggleStyle(.switch).labelsHidden()
+                }
+                Divider()
+                SettingRow(title: "Say \"send\" to send", detail: "End with \"send\", like \"I'm coming in 5 minutes send\", and Lipi presses Return after typing. In WhatsApp and Slack that sends the message.") {
+                    Toggle("", isOn: $model.sayToSend).toggleStyle(.switch).labelsHidden()
+                }
+                Divider()
+                SettingRow(title: "Learn from my corrections", detail: "When you fix a word Lipi typed, it remembers the fix for next time.") {
+                    Toggle("", isOn: $model.learnCorrections).toggleStyle(.switch).labelsHidden()
+                }
+            }
+        }
     }
 
     // MARK: Notetaker

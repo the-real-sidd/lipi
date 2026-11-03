@@ -50,7 +50,7 @@ struct MainView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(minWidth: 860, minHeight: 600)
+        .frame(minWidth: 980, minHeight: 640)
         .translationTask(model.translationRequest) { session in
             do {
                 try await session.prepareTranslation()
@@ -88,6 +88,8 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let model = AppModel.shared
 
+    var isVisible: Bool { window?.isVisible ?? false }
+
     func show(_ section: MainSection? = nil) {
         if let section { model.section = section }
         if window == nil {
@@ -98,17 +100,16 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             w.titlebarAppearsTransparent = true
             w.toolbarStyle = .unified
             w.isReleasedWhenClosed = false
-            w.setContentSize(NSSize(width: 980, height: 680))
+            w.setContentSize(NSSize(width: 1080, height: 720))
             w.delegate = self
             w.center()
-            w.setFrameAutosaveName("LipiMain")
+            w.setFrameAutosaveName("LipiMainV2")
             window = w
         }
         model.startPolling()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
-        Log.write("main window shown visible=\(window?.isVisible ?? false) frame=\(window?.frame ?? .zero)")
     }
 
     func windowWillClose(_ notification: Notification) {

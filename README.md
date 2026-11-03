@@ -19,17 +19,25 @@ Needs an Apple Silicon Mac on **macOS 26 or newer**. The app is about 1.5 MB. On
 
 | | |
 |---|---|
-| **Hold Right ⌥, speak** | Speak Hindi or Hinglish, and Lipi types English into any app |
-| **Hold Right ⌥ + ⇧** | Type exactly what you said (Hinglish in Roman letters, or any language) |
+| **Hold Right ⌥, speak** | Lipi types what you said, cleaned up, in the language you spoke (Hinglish stays Hinglish) |
+| **Hold Right ⌘, speak** | Speak Hindi, Hinglish or English, and Lipi types it in English (or any language you pick) |
+| **Double-tap either key** | Hands-free: keep talking, tap again to finish, Esc to cancel |
 | **Double-tap ⌥ on selected text** | Translate it: auto-detect, Hindi → English, English → Hindi, or any pair |
-| **Notes** | Notices Zoom / Meet / Teams / FaceTime / Slack calls, offers to take notes, transcribes you ("Me") and the call ("Others"), summarises, and stops when the call ends |
-| **Style** | Formal / Casual / very casual, chosen per app type: personal chats, work chat, email, other |
-| **Dictionary** | Teach names, fix repeat mistakes, save snippets ("my email" → you@example.com) |
-| **Learns from you** | Fix a word Lipi typed and it remembers: spellings and names go into your dictionary, translation fixes are reused when you talk about the same thing again |
-| **Numbers as digits** | "one point five MB" → 1.5 MB, "nine GB" → 9 GB, "three lakh" → 3 lakh, phone numbers as digits |
-| **Voice commands** | "new line" (leaves a blank line), "scratch that" (also नई लाइन, हटा दो) |
+| **AI mode** | Free Gemini key from Google AI Studio (two clicks): removes fillers, handles "no wait, Monday", fixes misheard words, natural Hinglish → English |
+| **Notes** | Notices Zoom / Meet / Teams / FaceTime / Slack calls, offers to take notes, transcribes you ("Me") and the call ("Others"), summarises, stops when the call ends |
+| **Style** | Formal / Casual / very casual, per app type: personal chats, work chat, email, other |
+| **Learns from you** | Fix a word Lipi typed and it remembers: spellings and names go into your dictionary, translation fixes are reused for the same topic |
+| **Voice commands** | "new line" (blank line), "scratch that", "heart emoji", "… send" to press Return |
 
-Every language and key can be changed in **Settings**: the language you speak, the language you type in, the translate direction, both shortcuts, microphone and theme.
+All three shortcut keys can be changed in **Settings → General** (Right ⌥, Left ⌥, Right ⌘, Right ⌃ or fn). Lipi never lets two actions share a key.
+
+### Mixed Hindi and English
+
+When Hindi is your language, Lipi runs Apple's Hindi and Indian-English recognizers on the same audio at once and keeps whichever matches what you actually said. So English sentences come out as English instead of being forced through Hindi.
+
+### Headphones stay in music mode
+
+Lipi records from the Mac's built-in mic by default, and only while you dictate. Bluetooth headphones therefore never drop into low-quality "call mode", so music doesn't get muffled. The mic starts in about 40–60 ms.
 
 ## How it's fast and small
 
@@ -39,30 +47,20 @@ Murmur, the app Lipi was modelled on, needs a 9 GB install (Ollama + two 4B LLMs
 |---|---|---|
 | Install size | ~9 GB | **~1.5 MB** app + OS-managed language packs |
 | Speech-to-text | Parakeet / Whisper, after you let go | Apple `SpeechAnalyzer`, **while you speak** |
-| Translation | 4B LLM via Ollama | Apple `Translation`, kept warm while you speak |
-| Cleanup | 4B LLM on every dictation | Instant rules; Apple Intelligence only for self-corrections |
-| Extra apps | Ollama must be running | None |
+| Translation | 4B LLM via Ollama | Apple `Translation` on-device, or Gemini in AI mode |
+| Cleanup | 4B LLM on every dictation | Instant rules on-device; Gemini in AI mode |
 
-Measured on an M1 with 8 GB, from releasing the key to text on screen:
+Measured on an M1 with 8 GB, from releasing the key to text on screen (automated tests, real audio at speaking speed):
 
-| Dictation | Time |
-|---|---|
-| English | **~190–240 ms** |
-| Hindi typed as spoken | **~350 ms** |
-| Hindi → English | **~310–430 ms** |
-| Translate selected text (warm) | **~60–90 ms** |
-
-Tricks that make this possible:
-- A speech analyzer is prepared ahead of time, so pressing the key only starts the audio.
-- Models stay loaded for the life of the app.
-- While you speak, Lipi translates the partial text in the background. macOS would otherwise unload the translation model after a few idle seconds (~400 ms cold vs ~70 ms warm).
-- Romanized Hinglish is normalised before translation. The recognizer capitalises Hindi words at random, which the translator mistakes for names.
-- Writing styles, fillers, stutters and commands are plain rules. They take under a millisecond and never need a model.
+| | On-device | AI mode |
+|---|---|---|
+| Median | **~180 ms** | **~0.9 s** |
+| Worst case | ~260 ms | ~1.9 s |
 
 ## Privacy
 
-There's no account, no server and no analytics. Audio is never saved; only the text you choose to keep is stored:
-- `~/Library/Application Support/Lipi/`: dictionary, history, meeting notes
+There's no account and no analytics. Audio is never saved or sent anywhere. In AI mode, the text of each dictation is sent to Google Gemini with your own key (Google may review it on the free plan); turn AI mode off for private chats. Locally stored:
+- `~/Library/Application Support/Lipi/`: dictionary, history, meeting notes, your Gemini key (file readable only by your user)
 - `~/Library/Logs/Lipi.log`: timings and lengths only, never what you said
 
 ## Build from source
@@ -75,25 +73,23 @@ scripts/build.sh --zip    # -> build/Lipi.zip for a release
 
 Only the Xcode Command Line Tools are needed (Swift 6). The SwiftUI `@State` macro isn't available without full Xcode, so views use `@ViewState`, an alias for the same property wrapper.
 
-Headless tools for testing and benchmarking:
+Test suites (run before every release):
 
 ```bash
 L=build/Lipi.app/Contents/MacOS/Lipi
-$L --status
-$L --transcribe clip.aiff --locale hi-IN --to en --realtime   # full pipeline at speaking speed
-$L --translate "kal office nahi aa paunga" --to en
-$L --style "Hey, are you free?" --as veryCasual
-$L --numbers "it was nine GB and now one point five MB"
-$L --summarize transcript.txt
+$L --test-gestures      # every shortcut sequence: hold, tap, double-tap hands-free, Esc, clashes
+$L --test-text          # fillers, numbers, commands, emoji, send, styles, learning
+$L --test-audio         # spoken clips through the live pipeline at speaking speed (add --ai-only for AI mode)
+$L --test-e2e           # the running app (defaults write app.lipi.mac testHooks -bool YES) pastes into TextEdit;
+                        # also checks the mic is closed when idle and headphones keep music quality
 ```
 
 ## Known limits
 
-- **Not notarized.** Releases are signed with a self-made "Lipi Signing" certificate, not an Apple Developer ID. macOS therefore keeps Microphone and Accessibility permission across updates from 0.1.1 on, but the app isn't notarized. The installer uses `curl`, so Gatekeeper doesn't block it. Builds made on another Mac without that certificate are ad-hoc signed and ask for permissions again after each update.
-- **Coming from 0.1.0?** Grant Accessibility once more after updating (use *Fix Accessibility* in Settings → Permissions if the switch already looks on).
-- **Hindi comes out in Roman letters.** Apple's Hindi recognizer writes Hinglish in Roman letters (e.g. "mujhe lagta hai"), so "type as spoken" gives Hinglish, not Devanagari.
-- **Smart cleanup needs Apple Intelligence.** It and AI meeting summaries only work when Apple Intelligence is on; otherwise Lipi uses its own rule-based cleanup and summary.
-- **Call audio needs permission.** Capturing the other side of a call needs macOS's one-time *System Audio Recording* permission. Without it, notes capture your mic only.
+- **Not notarized.** Releases are signed with a self-made "Lipi Signing" certificate, not an Apple Developer ID. Permissions survive updates, and the curl installer isn't blocked by Gatekeeper.
+- **On-device Hinglish → English is decent, not perfect.** Apple's translator struggles with some Hinglish idioms. AI mode fixes this.
+- **Notes on a real call:** capturing the other side needs macOS's one-time *System Audio Recording* permission. This hasn't been tested on a live call yet.
+- **Shortcut clashes:** the Claude and ChatGPT desktop apps also react to a double-tap of ⌥. If that's a problem, use Right ⌘ or fn for Lipi.
 
 ## Layout
 
@@ -101,14 +97,16 @@ $L --summarize transcript.txt
 Sources/Lipi/
   AppDelegate.swift        hotkeys → record → pipeline → insert; meeting flow; menu bar
   SpeechEngine.swift       SpeechAnalyzer sessions, standby pre-warming, asset installs
-  Audio.swift              mic capture + streaming resampler
+  Audio.swift              Core Audio HAL mic capture (built-in mic, never the default device)
   Pipeline.swift           cleanup → translate → smart cleanup → style → dictionary
   Translator.swift         Apple Translation sessions, batching, warm-up
   TextCleanup.swift        fillers, stutters, voice commands
   NumberWords.swift        spoken numbers → digits
   Learning.swift           learns from your corrections (dictionary + translation memory)
   StyleEngine.swift        per-app style detection + formal/casual/very casual rules
-  Hotkey.swift             modifier-key gestures (hold, +Shift, double-tap)
+  Hotkey.swift             gesture state machine (hold, hands-free double-tap, Esc) + key monitor
+  AIService.swift          Gemini client: model auto-pick, retired-model recovery, warm connection
+  AIWriter.swift           cleanup / translation / summary prompts
   Inserter.swift           paste with clipboard restore, read selection, cursor spacing
   Meetings/                detector (Core Audio), system-audio tap, recorder, summarizer, store
   UI/                      SwiftUI main window: Home, Notes, Style, Dictionary, Settings

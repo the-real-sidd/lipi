@@ -56,6 +56,38 @@ enum Inserter {
     }
 
     static func undo() { press(key: 6, flags: .maskCommand) } // Z
+    static func pressReturn() { press(key: 36, flags: []) }
+
+    /// Test harness only: presses or releases a modifier key exactly like the keyboard does.
+    static func postModifier(_ key: TriggerKey, down: Bool) {
+        let source = CGEventSource(stateID: .hidSystemState)
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(key.keyCode), keyDown: down) else { return }
+        event.type = .flagsChanged
+        var flags: UInt64 = 0
+        if down {
+            switch key.genericFlag {
+            case .option: flags |= CGEventFlags.maskAlternate.rawValue
+            case .command: flags |= CGEventFlags.maskCommand.rawValue
+            case .control: flags |= CGEventFlags.maskControl.rawValue
+            default: flags |= CGEventFlags.maskSecondaryFn.rawValue
+            }
+            if key != .fn { flags |= UInt64(key.deviceMask) }
+        }
+        event.flags = CGEventFlags(rawValue: flags)
+        event.post(tap: .cghidEventTap)
+    }
+
+    /// Text of the focused field (used by the test harness to check what actually landed).
+    static func focusedValue() -> String? {
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, 0.2)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(focused as! AXUIElement, kAXValueAttribute as CFString, &value) == .success else { return nil }
+        return value as? String
+    }
 
     /// Reads selected text: Accessibility first (instant, clipboard untouched), then a Cmd+C fallback.
     static func selectedText() async -> String? {

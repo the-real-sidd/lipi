@@ -34,7 +34,18 @@ enum NumberWords {
 
     private static let token = try! NSRegularExpression(pattern: #"[A-Za-z]+(?:[-'][A-Za-z]+)*|\S"#)
 
-    static func digitize(_ text: String) -> String {
+    /// The recognizer sometimes writes "one point five MB" as "one. 5 MB" or "1. 5 MB".
+    private static let brokenDecimal = try! NSRegularExpression(
+        pattern: #"(?i)(?<![\p{L}\d])(zero|one|two|three|four|five|six|seven|eight|nine|\d+)\. (\d+)(?=\s?(?:%|[A-Za-z]{1,3}\b|percent|lakh|crore))"#)
+
+    static func digitize(_ input: String) -> String {
+        var text = input
+        let digitsFor = ["zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9"]
+        for m in brokenDecimal.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let whole = Range(m.range, in: text), let a = Range(m.range(at: 1), in: text), let b = Range(m.range(at: 2), in: text) else { continue }
+            let first = digitsFor[text[a].lowercased()] ?? String(text[a])
+            text.replaceSubrange(whole, with: "\(first).\(text[b])")
+        }
         let ns = text as NSString
         let matches = token.matches(in: text, range: NSRange(location: 0, length: ns.length))
         let words = matches.map { ns.substring(with: $0.range) }

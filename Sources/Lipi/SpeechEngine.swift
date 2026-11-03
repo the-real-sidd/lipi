@@ -21,13 +21,35 @@ final class SpeechEngine {
         var onPartial: ((String) -> Void)?
         var onFinal: ((String, Double) -> Void)?
 
-        init(analyzer: SpeechAnalyzer, transcriber: SpeechTranscriber, locale: String) {
+        /// Hindi speakers switch to English mid-day. A second, English recognizer hears the same
+        /// audio; whichever matches what was actually spoken wins.
+        let english: SpeechTranscriber?
+        var englishFinal = ""
+        var englishVolatile = ""
+        var englishTask: Task<Void, Never>?
+        private(set) var pickedEnglish = false
+
+        init(analyzer: SpeechAnalyzer, transcriber: SpeechTranscriber, english: SpeechTranscriber?, locale: String) {
             self.analyzer = analyzer
             self.transcriber = transcriber
+            self.english = english
             self.locale = locale
         }
 
         var text: String { SpeechEngine.join(finalized, volatile) }
+        var englishText: String { SpeechEngine.join(englishFinal, englishVolatile) }
+
+        /// The transcript to use: English when the speaker was clearly talking English.
+        func best() -> String {
+            let primary = text, other = englishText
+            guard english != nil, !other.isEmpty else { return primary }
+            if primary.isEmpty { pickedEnglish = true; return other }
+            if LanguageCatalog.isLatin(primary), LanguageCatalog.detect(primary) == "en" {
+                pickedEnglish = true
+                return other
+            }
+            return primary
+        }
     }
 
     private var formats: [String: AVAudioFormat] = [:]
@@ -63,23 +85,43 @@ final class SpeechEngine {
 
     // MARK: Sessions
 
+    /// The English companion recognizer used for `locale`, if any.
+    private static func companion(for locale: String) -> String? {
+        let lang = LanguageCatalog.languageCode(ofLocale: locale)
+        let indic: Set<String> = ["hi", "mr", "bn", "gu", "pa", "ta", "te", "kn", "ml", "ur", "or", "ne"]
+        return indic.contains(lang) ? "en-IN" : nil
+    }
+
+    private var companionReady: [String: Bool] = [:]
+    private func usesCompanion(_ locale: String) async -> String? {
+        guard Settings.shared.mixedEnglish, let other = Self.companion(for: locale) else { return nil }
+        if let ready = companionReady[other] { return ready ? other : nil }
+        let ready = await Self.status(other) == .installed
+        companionReady[other] = ready
+        return ready ? other : nil
+    }
+
     func format(for locale: String) async -> AVAudioFormat? {
         if let f = formats[locale] { return f }
         guard await Self.status(locale) == .installed else { return nil }
-        let f = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [Self.makeTranscriber(locale)])
+        var modules: [any SpeechModule] = [Self.makeTranscriber(locale)]
+        if let other = await usesCompanion(locale) { modules.append(Self.makeTranscriber(other)) }
+        let f = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: modules)
         formats[locale] = f
         return f
     }
 
     func cachedFormat(for locale: String) -> AVAudioFormat? { formats[locale] }
 
-    private func makeSession(_ locale: String) async throws -> Session {
+    private func makeSession(_ locale: String, mixed: Bool = true) async throws -> Session {
         guard let format = await format(for: locale) else {
             throw NSError(domain: "Lipi", code: 2, userInfo: [NSLocalizedDescriptionKey: "Speech model not installed"])
         }
         let transcriber = Self.makeTranscriber(locale)
+        let companion = mixed ? await usesCompanion(locale) : nil
+        let english = companion.map { Self.makeTranscriber($0) }
         let analyzer = SpeechAnalyzer(
-            modules: [transcriber],
+            modules: [transcriber] + (english.map { [$0] } ?? []),
             options: SpeechAnalyzer.Options(priority: .userInitiated, modelRetention: .processLifetime)
         )
         if !contextualWords.isEmpty {
@@ -88,7 +130,7 @@ final class SpeechEngine {
             try await analyzer.setContext(context)
         }
         try await analyzer.prepareToAnalyze(in: format)
-        return Session(analyzer: analyzer, transcriber: transcriber, locale: locale)
+        return Session(analyzer: analyzer, transcriber: transcriber, english: english, locale: locale)
     }
 
     /// Loads the model and builds a ready-to-go analyzer. Safe to call repeatedly.
@@ -114,7 +156,8 @@ final class SpeechEngine {
             session = ready
             standby = nil
         } else {
-            session = try await makeSession(locale)
+            // Meetings (useStandby: false) keep one recognizer so segments aren't doubled.
+            session = try await makeSession(locale, mixed: useStandby)
         }
         session.onPartial = onPartial
         session.onFinal = onFinal
@@ -137,6 +180,23 @@ final class SpeechEngine {
                 Log.write("results error: \(error.localizedDescription)")
             }
         }
+        if let english = session.english {
+            session.englishTask = Task { [session] in
+                do {
+                    for try await result in english.results {
+                        let text = String(result.text.characters)
+                        if result.isFinal {
+                            session.englishFinal = Self.join(session.englishFinal, text)
+                            session.englishVolatile = ""
+                        } else {
+                            session.englishVolatile = text
+                        }
+                    }
+                } catch {
+                    Log.write("english results error: \(error.localizedDescription)")
+                }
+            }
+        }
         try await session.analyzer.start(inputSequence: input)
         return session
     }
@@ -149,12 +209,14 @@ final class SpeechEngine {
             Log.write("finalize error: \(error.localizedDescription)")
         }
         await session.resultsTask?.value
-        return Self.join(session.finalized, session.volatile)
+        await session.englishTask?.value
+        return session.best()
     }
 
     func cancel(_ session: Session) async {
         await session.analyzer.cancelAndFinishNow()
         session.resultsTask?.cancel()
+        session.englishTask?.cancel()
     }
 
     nonisolated static func join(_ a: String, _ b: String) -> String {

@@ -25,8 +25,42 @@ enum AudioDevices {
         }
     }
 
+    /// The Mac's own microphone. Using it keeps Bluetooth headphones out of low-quality call mode.
+    static func builtInInput() -> AudioDeviceID? {
+        inputs().first { transport($0.deviceID) == kAudioDeviceTransportTypeBuiltIn }?.deviceID
+    }
+
+    static func builtInName() -> String? {
+        inputs().first { transport($0.deviceID) == kAudioDeviceTransportTypeBuiltIn }?.name
+    }
+
+    private static func transport(_ id: AudioDeviceID) -> UInt32 {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyTransportType, mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value)
+        return value
+    }
+
     static func deviceID(forUID uid: String) -> AudioDeviceID? {
         inputs().first { $0.id == uid }?.deviceID
+    }
+
+    /// Sample rate of the current output device. Bluetooth headphones drop to 16–24 kHz when
+    /// something opens their mic (call mode), so this shows whether music quality changed.
+    static func outputSampleRate() -> Double {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                                                 mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var id = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id) == noErr else { return 0 }
+        var rate: Float64 = 0
+        var rateSize = UInt32(MemoryLayout<Float64>.size)
+        var rateAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate,
+                                                     mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        AudioObjectGetPropertyData(id, &rateAddress, 0, nil, &rateSize, &rate)
+        return rate
     }
 
     static func defaultOutputUID() -> String? {
@@ -40,7 +74,7 @@ enum AudioDevices {
     }
 
     /// Bundle IDs of other processes currently recording from any microphone.
-    static func processesUsingMicrophone() -> [(pid: pid_t, bundle: String)] {
+    static func processesUsingMicrophone(includeSelf: Bool = false) -> [(pid: pid_t, bundle: String)] {
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyProcessObjectList,
                                                  mScope: kAudioObjectPropertyScopeGlobal,
                                                  mElement: kAudioObjectPropertyElementMain)
@@ -57,7 +91,7 @@ enum AudioDevices {
                                                         mScope: kAudioObjectPropertyScopeGlobal,
                                                         mElement: kAudioObjectPropertyElementMain)
             AudioObjectGetPropertyData(object, &pidAddress, 0, nil, &pidSize, &pid)
-            guard pid != me, let bundle = stringProperty(object, kAudioProcessPropertyBundleID), !bundle.isEmpty else { return nil }
+            guard includeSelf || pid != me, let bundle = stringProperty(object, kAudioProcessPropertyBundleID), !bundle.isEmpty else { return nil }
             return (pid, bundle)
         }
     }

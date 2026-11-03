@@ -10,6 +10,10 @@ enum Summarizer {
         let transcript = meeting.transcriptText
         guard transcript.count > 40 else { return "Not much was said in this meeting." }
         let clock = Clock()
+        if AIService.shared.isEnabled, let ai = try? await AIWriter.summarize(transcript, language: meeting.language) {
+            Log.write("summary (Gemini) in \(clock.ms) ms")
+            return ai
+        }
         let model = SystemLanguageModel.default
         let supported = model.supportsLocale(Locale(identifier: meeting.locale))
         if model.isAvailable && supported, let ai = await aiSummary(transcript) {

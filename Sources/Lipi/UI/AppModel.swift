@@ -27,8 +27,27 @@ final class AppModel: ObservableObject {
     @Published var outputLanguage: String { didSet { s.outputLanguage = outputLanguage; changed() } }
     @Published var selectionSource: String { didSet { s.selectionSource = selectionSource; changed() } }
     @Published var selectionTarget: String { didSet { s.selectionTarget = selectionTarget; changed() } }
-    @Published var dictationKey: TriggerKey { didSet { s.dictationKey = dictationKey; changed() } }
-    @Published var translateKey: TriggerKey { didSet { s.translateKey = translateKey; changed() } }
+    @Published var dictationKey: TriggerKey { didSet { swapIfTaken(dictationKey, was: oldValue, by: \.dictationKey); s.dictationKey = dictationKey; changed() } }
+    @Published var translateKey: TriggerKey { didSet { swapIfTaken(translateKey, was: oldValue, by: \.translateKey); s.translateKey = translateKey; changed() } }
+    @Published var translateDictationKey: TriggerKey { didSet { swapIfTaken(translateDictationKey, was: oldValue, by: \.translateDictationKey); s.translateDictationKey = translateDictationKey; changed() } }
+
+    /// Picking a key another shortcut already uses swaps the two, so they never clash.
+    private var swapping = false
+    private func swapIfTaken(_ key: TriggerKey, was old: TriggerKey, by path: ReferenceWritableKeyPath<AppModel, TriggerKey>) {
+        guard !swapping, key != old else { return }
+        swapping = true
+        defer { swapping = false }
+        let all: [ReferenceWritableKeyPath<AppModel, TriggerKey>] = [\.dictationKey, \.translateKey, \.translateDictationKey]
+        for other in all where other != path && self[keyPath: other] == key {
+            self[keyPath: other] = old
+            if other == \AppModel.dictationKey { s.dictationKey = old }
+            if other == \AppModel.translateKey { s.translateKey = old }
+            if other == \AppModel.translateDictationKey { s.translateDictationKey = old }
+        }
+    }
+    @Published var aiEnabled: Bool { didSet { s.aiEnabled = aiEnabled } }
+    @Published var voiceCommands: Bool { didSet { s.voiceCommands = voiceCommands } }
+    @Published var sayToSend: Bool { didSet { s.sayToSend = sayToSend } }
     @Published var inputDeviceUID: String { didSet { s.inputDeviceUID = inputDeviceUID; changed() } }
     @Published var theme: Theme { didSet { s.theme = theme; NSApp.appearance = theme.appearance } }
     @Published var smartCleanup: Bool { didSet { s.smartCleanup = smartCleanup } }
@@ -50,18 +69,24 @@ final class AppModel: ObservableObject {
     @Published var inputDevices: [AudioInputDevice] = []
     @Published var translationRequest: TranslationSession.Configuration?
     @Published var section: MainSection = .home
+    @Published var settingsTab: SettingsView.Tab = .general
 
     private var installing: Set<String> = []
     private var pendingPair: String?
     private var timer: Timer?
 
     private init() {
+        Settings.shared.resolveShortcutClashes()
         speechLocale = s.speechLocale
         outputLanguage = s.outputLanguage
         selectionSource = s.selectionSource
         selectionTarget = s.selectionTarget
         dictationKey = s.dictationKey
         translateKey = s.translateKey
+        translateDictationKey = s.translateDictationKey
+        aiEnabled = s.aiEnabled
+        voiceCommands = s.voiceCommands
+        sayToSend = s.sayToSend
         inputDeviceUID = s.inputDeviceUID
         theme = s.theme
         smartCleanup = s.smartCleanup
@@ -84,11 +109,18 @@ final class AppModel: ObservableObject {
     // MARK: Readiness
 
     var spokenLanguage: String { LanguageCatalog.languageCode(ofLocale: speechLocale) }
-    var dictationPair: String? { outputLanguage.isEmpty || outputLanguage == spokenLanguage ? nil : "\(spokenLanguage)>\(outputLanguage)" }
+    var translateTarget: String { outputLanguage.isEmpty ? "en" : outputLanguage }
+    var dictationPair: String? { translateTarget == spokenLanguage ? nil : "\(spokenLanguage)>\(translateTarget)" }
+
+    /// Two actions on one key would make gestures ambiguous.
+    var shortcutConflict: String? {
+        if dictationKey == translateDictationKey { return "Typing and translating need different keys." }
+        if translateKey == dictationKey || translateKey == translateDictationKey { return "The translate-selection key must differ from the dictation keys." }
+        return nil
+    }
 
     var isReady: Bool {
         microphone == .ready && accessibility == .ready && speechModels[speechLocale] == .ready
-            && (dictationPair.map { translationModels[$0] == .ready } ?? true)
     }
 
     func startPolling() {

@@ -20,7 +20,6 @@ struct HomeView: View {
     }
 
     private var speaks: String { LanguageCatalog.name(model.speechLocale) }
-    private var types: String { model.outputLanguage.isEmpty ? "as spoken" : LanguageCatalog.name(model.outputLanguage) }
 
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
@@ -36,19 +35,19 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Text("Hold").font(.system(size: 26, weight: .bold, design: .rounded))
-                    Text(model.dictationKey.symbol)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .padding(.horizontal, 12).padding(.vertical, 4)
-                        .glassEffect(.regular.tint(.white.opacity(0.25)), in: .rect(cornerRadius: 10))
+                    keyCap(model.dictationKey.symbol)
                     Text("and speak").font(.system(size: 26, weight: .bold, design: .rounded))
                 }
-                Text("You speak \(speaks). Lipi types \(types), right where your cursor is.")
+                Text("Lipi types what you say, cleaned up, right where your cursor is. Hold \(model.translateDictationKey.symbol) instead to type it in \(LanguageCatalog.name(model.translateTarget)).")
                     .font(.system(size: 14, weight: .medium))
                     .opacity(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                    tip("⇧ while holding", "keep it as spoken")
+                    tip("Double-tap", "hands-free")
                     tip("Double-tap \(model.translateKey.symbol)", "translate selection")
+                    tip(AIService.shared.isEnabled ? "AI mode on" : "On-device", "")
                 }
+                .fixedSize()
                 .padding(.top, 4)
             }
             .foregroundStyle(.white)
@@ -57,10 +56,17 @@ struct HomeView: View {
         .frame(height: 210)
     }
 
+    private func keyCap(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 22, weight: .bold, design: .rounded))
+            .padding(.horizontal, 12).padding(.vertical, 4)
+            .glassEffect(.regular.tint(.white.opacity(0.25)), in: .rect(cornerRadius: 10))
+    }
+
     private func tip(_ key: String, _ what: String) -> some View {
         HStack(spacing: 6) {
-            Text(key).font(.system(size: 11, weight: .bold))
-            Text(what).font(.system(size: 11)).opacity(0.85)
+            Text(key).font(.system(size: 11, weight: .bold)).lineLimit(1)
+            if !what.isEmpty { Text(what).font(.system(size: 11)).opacity(0.85).lineLimit(1) }
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
         .glassEffect(.regular.tint(.white.opacity(0.18)), in: .capsule)
@@ -84,6 +90,14 @@ struct HomeView: View {
                 SettingRow(title: "\(speaks) speech model", detail: "Downloaded and managed by macOS") {
                     StatusBadge(state: model.speechModels[model.speechLocale] ?? .missing, action: "Download") {
                         model.installSpeech(model.speechLocale)
+                    }
+                }
+                SettingRow(title: "AI mode (optional, recommended)", detail: "Free Gemini key for Wispr-level cleanup and better Hinglish → English") {
+                    if AIService.shared.hasKey {
+                        StatusBadge(state: .ready)
+                    } else {
+                        Button("Set up") { model.settingsTab = .ai; model.section = .settings }
+                            .buttonStyle(.glass)
                     }
                 }
                 if let pair = model.dictationPair {

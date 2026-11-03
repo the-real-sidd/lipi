@@ -45,8 +45,9 @@ struct SettingRow<Control: View>: View {
                 Text(title).font(.system(size: 13, weight: .semibold))
                 if let detail { Text(detail).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
             }
-            Spacer(minLength: 12)
-            control
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+            control.fixedSize()
         }
         .padding(.vertical, 10)
     }
@@ -104,7 +105,7 @@ struct LanguagePicker: View {
             ForEach(choices) { Text($0.name).tag($0.id) }
         }
         .labelsHidden()
-        .frame(width: 220)
+        .frame(width: 200)
     }
 }
 

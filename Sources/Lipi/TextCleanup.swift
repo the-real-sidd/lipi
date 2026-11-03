@@ -15,9 +15,46 @@ enum TextCleanup {
         matches(undoPattern, text) ? .undo : nil
     }
 
+    private static let emoji: [(String, String)] = [
+        ("heart", "❤️"), ("red heart", "❤️"), ("laughing", "😂"), ("laughing crying", "😂"), ("logging", "😂"), ("lafing", "😂"), ("laughter", "😂"), ("rolling laughing", "🤣"),
+        ("thumbs up", "👍"), ("thumbs down", "👎"), ("smiley", "😊"), ("smile", "😊"), ("smiling", "😊"), ("wink", "😉"),
+        ("fire", "🔥"), ("folded hands", "🙏"), ("namaste", "🙏"), ("pray", "🙏"), ("crying", "😢"), ("sad", "😢"),
+        ("party", "🎉"), ("celebration", "🎉"), ("clap", "👏"), ("clapping", "👏"), ("ok", "👌"), ("okay", "👌"),
+        ("rocket", "🚀"), ("hundred", "💯"), ("100", "💯"), ("eyes", "👀"), ("thinking", "🤔"), ("cool", "😎"),
+        ("heart eyes", "😍"), ("kiss", "😘"), ("angry", "😠"), ("shocked", "😮"), ("star", "⭐"), ("check", "✅"), ("tick", "✅"),
+    ]
+    private static let emojiCommand: NSRegularExpression = {
+        let names = emoji.map(\.0).sorted { $0.count > $1.count }.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+        return rx("(?<![\\p{L}])(" + names + ")[ -]?(?:emoji|emojis|imoji)(?![\\p{L}])")
+    }()
+    private static let sendCommand = rx(#"(?:^|[\s,.]+)(?:and\s+)?(?:send it|send|bhej do|भेज दो|सेंड)[\s.!।]*$"#)
+
+    /// Spoken commands: "new line" (a blank line), "new paragraph", "heart emoji".
+    static func applyCommands(_ text: String) -> String {
+        var s = text
+        s = replace(newParagraph, in: s, with: "\n\n")
+        // A blank line between paragraphs reads better in chats and email than a bare return.
+        s = replace(newLine, in: s, with: "\n\n")
+        let ns = s as NSString
+        for m in emojiCommand.matches(in: s, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let name = ns.substring(with: m.range(at: 1)).lowercased()
+            if let e = emoji.first(where: { $0.0 == name })?.1, let r = Range(m.range, in: s) { s.replaceSubrange(r, with: e) }
+        }
+        return s
+    }
+
+    /// "…see you at 5 send" -> ("…see you at 5", true)
+    static func stripSend(_ text: String) -> (String, Bool) {
+        guard matches(sendCommand, text) else { return (text, false) }
+        let stripped = replace(sendCommand, in: text, with: "")
+        return stripped.trimmingCharacters(in: .whitespaces).isEmpty ? (text, false) : (stripped, true)
+    }
+
     // MARK: Cleanup
 
-    private static let englishFillers = rx(#"(?<![\p{L}\p{M}])(?:u+m+|u+h+|e+r+m+|h+m+|m+h+m+|u+h+m+)(?![\p{L}\p{M}])[,.]?\s*"#)
+    private static let englishFillers = rx(#"(?<![\p{L}\p{M}])(?:u+m+|u+h+|e+r+m+|e+r+|h+m+|m+h+m+|u+h+m+|m{2,}|a+h+|e+h+)(?![\p{L}\p{M}])[,.…]?\s*"#)
+    /// The Hindi recognizer writes filler sounds in capitals ("UHH", "UNN", "HMM"). Case-sensitive on purpose.
+    private static let capsFillers = try! NSRegularExpression(pattern: #"(?<![\p{L}])(?:U+H+|U+N+|U+M+|H+M+|A+H+|E+H+|M{2,})(?![\p{L}])[,.]?\s*"#)
     private static let hindiFillers = rx(#"(?<![\p{L}\p{M}])(?:उम्म?|अम्म?|हम्म|अं|उह)(?![\p{L}\p{M}])[,।]?\s*"#)
     // "I I think" -> "I think". Words people repeat on purpose are left alone.
     private static let stutter = rx(#"(?<![\p{L}\p{M}'])([\p{L}']+)(?:[\s,]+\1)+(?![\p{L}\p{M}'])"#)
@@ -30,11 +67,9 @@ enum TextCleanup {
     /// Cleans text in the language it was spoken in, before any translation.
     /// `language` is a language code like "en" or "hi".
     static func clean(_ text: String, language: String) -> String {
-        var s = text
-        s = replace(newParagraph, in: s, with: "\n\n")
-        // A blank line between paragraphs reads better in chats and email than a bare return.
-        s = replace(newLine, in: s, with: "\n\n")
+        var s = Settings.shared.voiceCommands ? applyCommands(text) : text
         s = replace(hindiFillers, in: s, with: "")
+        s = capsFillers.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: "")
         s = replace(englishFillers, in: s, with: "")
         // Repeats are often intentional outside English ("dheere dheere", "kabhi kabhi").
         if language == "en" { s = removeStutters(s) }

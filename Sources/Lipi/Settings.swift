@@ -134,12 +134,9 @@ final class Settings {
         get { string("selectionTarget", "en") }
         set { d.set(newValue, forKey: "selectionTarget") }
     }
-    var dictationKey: TriggerKey {
-        get { TriggerKey(rawValue: string("dictationKey", "")) ?? .rightOption }
-        set { d.set(newValue.rawValue, forKey: "dictationKey") }
-    }
+    /// Double-tap to translate the selected text.
     var translateKey: TriggerKey {
-        get { TriggerKey(rawValue: string("translateKey", "")) ?? .rightOption }
+        get { TriggerKey(rawValue: string("translateKey", "")) ?? .leftOption }
         set { d.set(newValue.rawValue, forKey: "translateKey") }
     }
     /// Core Audio device UID. Empty means the system default input.
@@ -165,6 +162,59 @@ final class Settings {
         get { bool("playSounds", true) }
         set { d.set(newValue, forKey: "playSounds") }
     }
+    /// Hold to dictate in the language you speak (no translation).
+    var dictationKey: TriggerKey {
+        get { TriggerKey(rawValue: string("dictationKey", "")) ?? .rightOption }
+        set { d.set(newValue.rawValue, forKey: "dictationKey") }
+    }
+    /// Hold to dictate and translate into `outputLanguage`.
+    var translateDictationKey: TriggerKey {
+        get { TriggerKey(rawValue: string("translateDictationKey", "")) ?? .rightCommand }
+        set { d.set(newValue.rawValue, forKey: "translateDictationKey") }
+    }
+    var aiEnabled: Bool {
+        get { bool("aiEnabled", true) }
+        set { d.set(newValue, forKey: "aiEnabled") }
+    }
+    var aiModel: String {
+        get { string("aiModel", "gemini-2.5-flash-lite") }
+        set { d.set(newValue, forKey: "aiModel") }
+    }
+    /// Run an Indian-English recognizer next to the Hindi one and use whichever fits.
+    var mixedEnglish: Bool {
+        get { bool("mixedEnglish", true) }
+        set { d.set(newValue, forKey: "mixedEnglish") }
+    }
+    var aiThinkingUnsupported: Bool {
+        get { bool("aiThinkingUnsupported", false) }
+        set { d.set(newValue, forKey: "aiThinkingUnsupported") }
+    }
+    var voiceCommands: Bool {
+        get { bool("voiceCommands", true) }
+        set { d.set(newValue, forKey: "voiceCommands") }
+    }
+    var sayToSend: Bool {
+        get { bool("sayToSend", false) }
+        set { d.set(newValue, forKey: "sayToSend") }
+    }
+    /// Keeps the three shortcuts on different keys (older versions shared one key). The user's
+    /// explicit choices win; a clashing key gets the first free one.
+    func resolveShortcutClashes() {
+        let preferred: [TriggerKey] = [.rightCommand, .leftOption, .rightOption, .fn, .rightControl]
+        if translateDictationKey == dictationKey {
+            translateDictationKey = preferred.first { $0 != dictationKey && $0 != translateKey } ?? .fn
+        }
+        if translateKey == dictationKey {
+            translateKey = preferred.reversed().first { $0 != dictationKey && $0 != translateDictationKey } ?? .fn
+        }
+        if translateDictationKey == translateKey {
+            translateDictationKey = preferred.first { $0 != dictationKey && $0 != translateKey } ?? .fn
+        }
+    }
+
+    /// Developer-only: lets the test harness drive dictation with audio files.
+    var testHooks: Bool { d.bool(forKey: "testHooks") }
+
     var learnCorrections: Bool {
         get { bool("learnCorrections", true) }
         set { d.set(newValue, forKey: "learnCorrections") }
