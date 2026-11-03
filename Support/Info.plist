@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>Lipi</string>
+    <key>CFBundleDisplayName</key><string>Lipi</string>
+    <key>CFBundleIdentifier</key><string>app.lipi.mac</string>
+    <key>CFBundleExecutable</key><string>Lipi</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>LSMinimumSystemVersion</key><string>26.0</string>
+    <key>LSUIElement</key><true/>
+    <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Lipi listens only while you hold Right Option, and turns your speech into text on this Mac.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Lipi uses on-device speech recognition. Your voice never leaves this Mac.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Lipi transcribes the other people in your meeting into notes, on this Mac. No audio is saved.</string>
+    <key>NSHumanReadableCopyright</key><string>Lipi</string>
+</dict>
+</plist>
