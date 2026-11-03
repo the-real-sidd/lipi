@@ -19,15 +19,24 @@ main() {
     major=$(sw_vers -productVersion | cut -d. -f1)
     [ "$major" -ge 26 ] || stop "Lipi needs macOS 26 or newer (it uses Apple's new on-device speech and translation)."
 
-    if [ -w /Applications ]; then APPS=/Applications; else APPS="$HOME/Applications"; mkdir -p "$APPS"; fi
+    if [ -n "${LIPI_INSTALL_DIR:-}" ]; then APPS="$LIPI_INSTALL_DIR"; mkdir -p "$APPS"
+    elif [ -w /Applications ]; then APPS=/Applications
+    else APPS="$HOME/Applications"; mkdir -p "$APPS"; fi
     WORK=$(mktemp -d)
     trap 'rm -rf "$WORK"' EXIT
 
-    if [ "${1:-}" = "--source" ]; then
-        command -v swift >/dev/null || stop "Swift isn't installed. Run: xcode-select --install"
+    local mode="${1:-}"
+    # No published release yet? Build it here instead (takes about a minute).
+    if [ "$mode" != "--source" ] && ! curl -fsLI -o /dev/null "$ZIP_URL"; then
+        say "No prebuilt download yet, so Lipi will be built on this Mac"
+        mode="--source"
+    fi
+
+    if [ "$mode" = "--source" ]; then
+        command -v swift >/dev/null || stop "Swift isn't installed. Run: xcode-select --install, then run this installer again."
         say "Building Lipi from source"
-        git clone --depth 1 "https://github.com/$REPO.git" "$WORK/src"
-        (cd "$WORK/src" && scripts/build.sh)
+        git clone --quiet --depth 1 "https://github.com/$REPO.git" "$WORK/src"
+        (cd "$WORK/src" && scripts/build.sh >/dev/null)
         APP="$WORK/src/build/Lipi.app"
     else
         say "Downloading Lipi (about 1.5 MB)"
@@ -45,10 +54,10 @@ main() {
     codesign --verify "$APP" 2>/dev/null || stop "the app failed its signature check."
 
     say "Installing to $APPS"
-    pkill -x Lipi 2>/dev/null || true
+    [ -n "${LIPI_INSTALL_DIR:-}" ] || pkill -x Lipi 2>/dev/null || true
     rm -rf "$APPS/Lipi.app"
     mv "$APP" "$APPS/"
-    open "$APPS/Lipi.app"
+    [ -n "${LIPI_NO_OPEN:-}" ] || open "$APPS/Lipi.app"
 
     cat <<'DONE'
 
