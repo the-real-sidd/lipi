@@ -34,6 +34,7 @@ final class AppModel: ObservableObject {
     @Published var smartCleanup: Bool { didSet { s.smartCleanup = smartCleanup } }
     @Published var playSounds: Bool { didSet { s.playSounds = playSounds } }
     @Published var keepHistory: Bool { didSet { s.keepHistory = keepHistory } }
+    @Published var learnCorrections: Bool { didSet { s.learnCorrections = learnCorrections } }
     @Published var meetingAutoDetect: Bool { didSet { s.meetingAutoDetect = meetingAutoDetect; changed() } }
     @Published var meetingAutoStop: Bool { didSet { s.meetingAutoStop = meetingAutoStop } }
     @Published var meetingLocale: String { didSet { s.meetingLocale = meetingLocale; changed() } }
@@ -66,6 +67,7 @@ final class AppModel: ObservableObject {
         smartCleanup = s.smartCleanup
         playSounds = s.playSounds
         keepHistory = s.keepHistory
+        learnCorrections = s.learnCorrections
         meetingAutoDetect = s.meetingAutoDetect
         meetingAutoStop = s.meetingAutoStop
         meetingLocale = s.meetingLocale

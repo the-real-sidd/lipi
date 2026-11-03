@@ -19,6 +19,7 @@ final class Pipeline {
     let translator = Translator()
     let polisher = Polisher()
     let dictionary = PersonalDictionary()
+    let memory = TranslationMemory.shared
     private(set) var lastTiming = Timing()
 
     /// - Parameters:
@@ -59,6 +60,8 @@ final class Pipeline {
             lastTiming.polishMs = clock.ms
         }
 
+        if outputLanguage == "en" { text = NumberWords.digitize(text) }
+        text = memory.apply(to: text, source: trimmed)
         text = StyleEngine.apply(Settings.shared.style(for: category), to: text)
         text = dictionary.apply(text)
         return .text(text, note: note)

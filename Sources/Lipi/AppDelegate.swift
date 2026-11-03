@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let detector = MeetingDetector()
     private lazy var meetingPanel = MeetingPanel(recorder: model.recorder)
     private var statusItem: NSStatusItem!
+    private lazy var learner = CorrectionLearner(dictionary: pipeline.dictionary)
 
     private enum State { case idle, recording, finishing }
     private var state: State = .idle
@@ -23,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var sessionTask: Task<SpeechEngine.Session, Error>?
     private var showOverlayWork: DispatchWorkItem?
     private var pendingProblem: String?
+    private var lastRaw = ""
+    private var lastTranslated = false
     private var hotkeyTrusted = false
     private let startSound = NSSound(named: "Tink")
 
@@ -50,6 +53,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         mic.select(deviceUID: settings.inputDeviceUID)
         mic.prepare()
+
+        learner.onLearned = { [weak self] message in self?.overlay.flash(message, seconds: 2.2) }
+        learner.onDictionaryChanged = { [weak self] in
+            guard let self else { return }
+            NotificationCenter.default.post(name: .lipiDictionaryChanged, object: nil)
+            self.speech.contextualWords = self.pipeline.dictionary.words
+            self.speech.resetStandby()
+            Task { await self.speech.prepareStandby(self.settings.speechLocale) }
+        }
 
         let quiet = launchedAsLoginItem
         Task {
@@ -152,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func beginRecording(keep: Bool) {
         guard state == .idle else { return }
+        learner.check(final: true)
         pendingProblem = nil
         keepAsSpoken = keep
         let locale = settings.speechLocale
@@ -243,6 +256,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 speech.resetStandby()
             }
             let output = await pipeline.produce(raw, speechLocale: locale, target: target, category: category)
+            lastRaw = raw
+            lastTranslated = pipeline.lastTiming.translateMs > 0
             deliver(output, app: appName, ms: released.ms)
             Log.write("dictation \(locale)→\(target ?? "same") style=\(category.rawValue) chars=\(raw.count) speech_tail_ms=\(speechMs) translate_ms=\(pipeline.lastTiming.translateMs) polish_ms=\(pipeline.lastTiming.polishMs) release_to_text_ms=\(released.ms)")
         }
@@ -264,6 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
             let outcome = Inserter.insert(Inserter.spacedForCursor(text))
+            if outcome == .pasted { learner.begin(inserted: text, source: lastRaw, translated: lastTranslated) }
             if outcome == .copiedOnly {
                 overlay.flash("Your text is copied. Lipi needs Accessibility to type it for you: open Lipi → Settings → Permissions.", isError: true, seconds: 5)
                 watchForAccessibility()

@@ -53,6 +53,18 @@ enum TestRunner {
             print(StyleEngine.apply(style, to: value("--style") ?? ""))
             return 0
 
+        case "--diff":
+            // --diff BEFORE AFTER INSERTED
+            let a = args.count > 3 ? Array(args[1...3]) : ["", "", ""]
+            if let (old, new) = CorrectionLearner.change(from: a[0], to: a[1], within: a[2]) {
+                print("change: \(old) -> \(new), similarity \(String(format: "%.2f", CorrectionLearner.similarity(old.lowercased(), new.lowercased())))")
+            } else { print("no learnable change") }
+            return 0
+
+        case "--numbers":
+            print(NumberWords.digitize(value("--numbers") ?? ""))
+            return 0
+
         case "--detect":
             print(LanguageCatalog.detect(value("--detect") ?? "") ?? "unknown")
             return 0

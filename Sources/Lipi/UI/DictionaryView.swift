@@ -1,5 +1,9 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let lipiDictionaryChanged = Notification.Name("LipiDictionaryChanged")
+}
+
 /// Friendly editor for ~/Library/Application Support/Lipi/dictionary.txt.
 struct DictionaryView: View {
     struct Entry: Identifiable, Hashable {
@@ -25,6 +29,7 @@ struct DictionaryView: View {
             .frame(maxWidth: .infinity)
         }
         .onAppear(perform: load)
+        .onReceive(NotificationCenter.default.publisher(for: .lipiDictionaryChanged)) { _ in load() }
     }
 
     private var addCard: some View {
@@ -81,6 +86,37 @@ struct DictionaryView: View {
             }
             Button("Open dictionary file") { NSWorkspace.shared.open(PersonalDictionary.url) }
                 .buttonStyle(.link).font(.system(size: 12))
+            learned
+        }
+    }
+
+    @ObservedObject private var memory = TranslationMemory.shared
+
+    @ViewBuilder private var learned: some View {
+        if !memory.fixes.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Learned translation fixes").font(.system(size: 13, weight: .semibold)).padding(.top, 10)
+                Text("Used when you speak about the same thing again.").font(.system(size: 11)).foregroundStyle(.secondary)
+                Card(padding: 4) {
+                    VStack(spacing: 0) {
+                        ForEach(memory.fixes) { fix in
+                            HStack {
+                                Image(systemName: "sparkles").foregroundStyle(Brand.accent).frame(width: 22)
+                                Text(fix.wrong).font(.system(size: 13)).strikethrough().foregroundStyle(.secondary)
+                                Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.tertiary)
+                                Text(fix.right).font(.system(size: 13, weight: .medium))
+                                Text("· \(fix.anchors.prefix(3).joined(separator: ", "))")
+                                    .font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1)
+                                Spacer()
+                                Button { memory.remove(fix) } label: { Image(systemName: "trash") }
+                                    .buttonStyle(.borderless).foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 9)
+                            Divider().padding(.leading, 44)
+                        }
+                    }
+                }
+            }
         }
     }
 

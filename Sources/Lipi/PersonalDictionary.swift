@@ -79,6 +79,21 @@ final class PersonalDictionary {
         return true
     }
 
+    /// Appends a learned fix ("wrong = right", or just the word when only its casing changed).
+    /// Returns false if the dictionary already had it.
+    @discardableResult
+    func add(wrong: String, right: String) -> Bool {
+        createIfMissing()
+        let line = wrong.lowercased() == right.lowercased() ? right : "\(wrong) = \(right)"
+        let content = (try? String(contentsOf: Self.url, encoding: .utf8)) ?? Self.template
+        let existing = content.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+        guard !existing.contains(line.lowercased()) else { return false }
+        let updated = content.hasSuffix("\n") ? content + line + "\n" : content + "\n" + line + "\n"
+        try? updated.write(to: Self.url, atomically: true, encoding: .utf8)
+        reloadIfNeeded()
+        return true
+    }
+
     func apply(_ text: String) -> String {
         var s = text
         for rule in rules {

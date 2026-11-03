@@ -25,7 +25,9 @@ Needs an Apple Silicon Mac on **macOS 26 or newer**. The app is about 1.5 MB. On
 | **Notes** | Notices Zoom / Meet / Teams / FaceTime / Slack calls, offers to take notes, transcribes you ("Me") and the call ("Others"), summarises, and stops when the call ends |
 | **Style** | Formal / Casual / very casual, chosen per app type: personal chats, work chat, email, other |
 | **Dictionary** | Teach names, fix repeat mistakes, save snippets ("my email" → you@example.com) |
-| **Voice commands** | "new line", "new paragraph", "scratch that" (also नई लाइन, हटा दो) |
+| **Learns from you** | Fix a word Lipi typed and it remembers: spellings and names go into your dictionary, translation fixes are reused when you talk about the same thing again |
+| **Numbers as digits** | "one point five MB" → 1.5 MB, "nine GB" → 9 GB, "three lakh" → 3 lakh, phone numbers as digits |
+| **Voice commands** | "new line" (leaves a blank line), "scratch that" (also नई लाइन, हटा दो) |
 
 Every language and key can be changed in **Settings**: the language you speak, the language you type in, the translate direction, both shortcuts, microphone and theme.
 
@@ -81,6 +83,7 @@ $L --status
 $L --transcribe clip.aiff --locale hi-IN --to en --realtime   # full pipeline at speaking speed
 $L --translate "kal office nahi aa paunga" --to en
 $L --style "Hey, are you free?" --as veryCasual
+$L --numbers "it was nine GB and now one point five MB"
 $L --summarize transcript.txt
 ```
 
@@ -102,6 +105,8 @@ Sources/Lipi/
   Pipeline.swift           cleanup → translate → smart cleanup → style → dictionary
   Translator.swift         Apple Translation sessions, batching, warm-up
   TextCleanup.swift        fillers, stutters, voice commands
+  NumberWords.swift        spoken numbers → digits
+  Learning.swift           learns from your corrections (dictionary + translation memory)
   StyleEngine.swift        per-app style detection + formal/casual/very casual rules
   Hotkey.swift             modifier-key gestures (hold, +Shift, double-tap)
   Inserter.swift           paste with clipboard restore, read selection, cursor spacing

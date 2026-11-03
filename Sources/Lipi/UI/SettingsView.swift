@@ -37,8 +37,16 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
                 Spacer()
-                Text("Lipi \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
-                    .font(.system(size: 11)).foregroundStyle(.tertiary).padding(10)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Lipi \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
+                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                    Link(destination: URL(string: "https://instagram.com/the.real.sidd")!) {
+                        Text("by @the.real.sidd").font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(Brand.accent)
+                    .help("instagram.com/the.real.sidd")
+                }
+                .padding(10)
             }
             .padding(14)
             .frame(width: 190)
@@ -95,6 +103,10 @@ struct SettingsView: View {
                 Divider()
                 SettingRow(title: "Smart cleanup", detail: "Uses Apple Intelligence on this Mac to fix \"at two, no wait, three\" corrections.") {
                     Toggle("", isOn: $model.smartCleanup).toggleStyle(.switch).labelsHidden()
+                }
+                Divider()
+                SettingRow(title: "Learn from my corrections", detail: "When you fix a word Lipi typed, it remembers the fix for next time.") {
+                    Toggle("", isOn: $model.learnCorrections).toggleStyle(.switch).labelsHidden()
                 }
                 Divider()
                 SettingRow(title: "Start sound") {

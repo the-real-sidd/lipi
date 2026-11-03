@@ -32,7 +32,8 @@ enum TextCleanup {
     static func clean(_ text: String, language: String) -> String {
         var s = text
         s = replace(newParagraph, in: s, with: "\n\n")
-        s = replace(newLine, in: s, with: "\n")
+        // A blank line between paragraphs reads better in chats and email than a bare return.
+        s = replace(newLine, in: s, with: "\n\n")
         s = replace(hindiFillers, in: s, with: "")
         s = replace(englishFillers, in: s, with: "")
         // Repeats are often intentional outside English ("dheere dheere", "kabhi kabhi").

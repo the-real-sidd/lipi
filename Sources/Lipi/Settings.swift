@@ -165,6 +165,10 @@ final class Settings {
         get { bool("playSounds", true) }
         set { d.set(newValue, forKey: "playSounds") }
     }
+    var learnCorrections: Bool {
+        get { bool("learnCorrections", true) }
+        set { d.set(newValue, forKey: "learnCorrections") }
+    }
     var keepHistory: Bool {
         get { bool("keepHistory", true) }
         set { d.set(newValue, forKey: "keepHistory") }

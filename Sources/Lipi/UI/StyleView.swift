@@ -51,7 +51,7 @@ struct StyleView: View {
     private var banner: some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
-                Text(category.headline).font(.system(size: 22, weight: .semibold, design: .serif))
+                Text(category.headline).font(.system(size: 20, weight: .bold, design: .rounded))
                 Text(category == .other ? "Any app not listed in the other tabs." : "Detected automatically, including web versions in your browser.")
                     .font(.system(size: 12)).opacity(0.85)
             }
