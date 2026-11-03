@@ -86,7 +86,8 @@ $L --summarize transcript.txt
 
 ## Known limits
 
-- **Permissions reset on update.** The app is ad-hoc signed, so after an update macOS asks for Microphone and Accessibility again. A Developer ID signature would fix this.
+- **Not notarized.** Releases are signed with a self-made "Lipi Signing" certificate, not an Apple Developer ID. macOS therefore keeps Microphone and Accessibility permission across updates from 0.1.1 on, but the app isn't notarized. The installer uses `curl`, so Gatekeeper doesn't block it. Builds made on another Mac without that certificate are ad-hoc signed and ask for permissions again after each update.
+- **Coming from 0.1.0?** Grant Accessibility once more after updating (use *Fix Accessibility* in Settings → Permissions if the switch already looks on).
 - **Hindi comes out in Roman letters.** Apple's Hindi recognizer writes Hinglish in Roman letters (e.g. "mujhe lagta hai"), so "type as spoken" gives Hinglish, not Devanagari.
 - **Smart cleanup needs Apple Intelligence.** It and AI meeting summaries only work when Apple Intelligence is on; otherwise Lipi uses its own rule-based cleanup and summary.
 - **Call audio needs permission.** Capturing the other side of a call needs macOS's one-time *System Audio Recording* permission. Without it, notes capture your mic only.
